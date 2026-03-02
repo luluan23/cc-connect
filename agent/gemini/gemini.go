@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -79,6 +80,78 @@ func normalizeMode(raw string) string {
 }
 
 func (a *Agent) Name() string { return "gemini" }
+
+func (a *Agent) SetModel(model string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.model = model
+	slog.Info("gemini: model changed", "model", model)
+}
+
+func (a *Agent) GetModel() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.model
+}
+
+func (a *Agent) AvailableModels(ctx context.Context) []core.ModelOption {
+	if models := a.fetchModelsFromAPI(ctx); len(models) > 0 {
+		return models
+	}
+	return []core.ModelOption{
+		{Name: "gemini-2.5-pro", Desc: "Gemini 2.5 Pro (most capable)"},
+		{Name: "gemini-2.5-flash", Desc: "Gemini 2.5 Flash (fast)"},
+		{Name: "gemini-2.0-flash", Desc: "Gemini 2.0 Flash (lightweight)"},
+	}
+}
+
+func (a *Agent) fetchModelsFromAPI(ctx context.Context) []core.ModelOption {
+	apiKey := os.Getenv("GEMINI_API_KEY")
+	if apiKey == "" {
+		apiKey = os.Getenv("GOOGLE_API_KEY")
+	}
+	if apiKey == "" {
+		return nil
+	}
+
+	url := "https://generativelanguage.googleapis.com/v1beta/models?key=" + apiKey
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Debug("gemini: failed to fetch models", "error", err)
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+
+	var result struct {
+		Models []struct {
+			Name        string `json:"name"`
+			DisplayName string `json:"displayName"`
+			Description string `json:"description"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil
+	}
+
+	var models []core.ModelOption
+	for _, m := range result.Models {
+		id := strings.TrimPrefix(m.Name, "models/")
+		if !strings.HasPrefix(id, "gemini-") {
+			continue
+		}
+		models = append(models, core.ModelOption{Name: id, Desc: m.DisplayName})
+	}
+	sort.Slice(models, func(i, j int) bool { return models[i].Name > models[j].Name })
+	return models
+}
 
 func (a *Agent) SetSessionEnv(env []string) {
 	a.mu.Lock()
@@ -293,7 +366,7 @@ func listGeminiSessions(workDir string) ([]core.AgentSessionInfo, error) {
 	return sessions, nil
 }
 
-// extractSessionSummary picks the first user message as the session summary.
+// extractSessionSummary picks the first meaningful user text as the session summary.
 func extractSessionSummary(sf *sessionFile) string {
 	for _, msg := range sf.Messages {
 		if msg.Type != "user" {
@@ -301,9 +374,18 @@ func extractSessionSummary(sf *sessionFile) string {
 		}
 		for _, c := range msg.Content {
 			text := strings.TrimSpace(c.Text)
-			if text != "" {
-				lines := strings.SplitN(text, "\n", 2)
-				return strings.TrimSpace(lines[0])
+			if text == "" {
+				continue
+			}
+			for _, line := range strings.Split(text, "\n") {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+				if strings.HasPrefix(line, "{") && strings.HasSuffix(line, "}") {
+					continue
+				}
+				return line
 			}
 		}
 	}

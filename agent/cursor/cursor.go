@@ -81,6 +81,29 @@ func normalizeMode(raw string) string {
 
 func (a *Agent) Name() string { return "cursor" }
 
+func (a *Agent) SetModel(model string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.model = model
+	slog.Info("cursor: model changed", "model", model)
+}
+
+func (a *Agent) GetModel() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.model
+}
+
+func (a *Agent) AvailableModels(_ context.Context) []core.ModelOption {
+	return []core.ModelOption{
+		{Name: "claude-sonnet-4-20250514", Desc: "Claude Sonnet 4"},
+		{Name: "claude-opus-4-20250514", Desc: "Claude Opus 4"},
+		{Name: "gpt-4o", Desc: "GPT-4o"},
+		{Name: "gemini-2.5-pro", Desc: "Gemini 2.5 Pro"},
+		{Name: "cursor-small", Desc: "Cursor Small (fast)"},
+	}
+}
+
 func (a *Agent) SetSessionEnv(env []string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()

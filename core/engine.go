@@ -659,6 +659,8 @@ func (e *Engine) handleCommand(p Platform, msg *Message, raw string) {
 		e.cmdHistory(p, msg, args)
 	case "/allow":
 		e.cmdAllow(p, msg, args)
+	case "/model":
+		e.cmdModel(p, msg, args)
 	case "/mode":
 		e.cmdMode(p, msg, args)
 	case "/lang":
@@ -984,6 +986,74 @@ func langDisplayName(lang Language) string {
 
 func (e *Engine) cmdHelp(p Platform, msg *Message) {
 	e.reply(p, msg.ReplyCtx, e.i18n.T(MsgHelp))
+}
+
+func (e *Engine) cmdModel(p Platform, msg *Message, args []string) {
+	switcher, ok := e.agent.(ModelSwitcher)
+	if !ok {
+		e.reply(p, msg.ReplyCtx, e.i18n.T(MsgModelNotSupported))
+		return
+	}
+
+	fetchCtx, cancel := context.WithTimeout(e.ctx, 10*time.Second)
+	defer cancel()
+	models := switcher.AvailableModels(fetchCtx)
+	isZh := e.i18n.CurrentLang() == LangChinese
+
+	if len(args) == 0 {
+		var sb strings.Builder
+		current := switcher.GetModel()
+		if current == "" {
+			if isZh {
+				sb.WriteString("当前模型: (未设置，使用 Agent 默认值)\n")
+			} else {
+				sb.WriteString("Current model: (not set, using agent default)\n")
+			}
+		} else {
+			sb.WriteString(e.i18n.Tf(MsgModelCurrent, current))
+			sb.WriteString("\n")
+		}
+		sb.WriteString("\n")
+		if isZh {
+			sb.WriteString("可用模型:\n")
+		} else {
+			sb.WriteString("Available models:\n")
+		}
+		for i, m := range models {
+			marker := "  "
+			if m.Name == current {
+				marker = "> "
+			}
+			desc := m.Desc
+			if desc != "" {
+				desc = " — " + desc
+			}
+			sb.WriteString(fmt.Sprintf("%s%d. %s%s\n", marker, i+1, m.Name, desc))
+		}
+		sb.WriteString("\n")
+		if isZh {
+			sb.WriteString("用法: `/model <序号>` 或 `/model <模型名>`")
+		} else {
+			sb.WriteString("Usage: `/model <number>` or `/model <model_name>`")
+		}
+		e.reply(p, msg.ReplyCtx, sb.String())
+		return
+	}
+
+	target := args[0]
+	if idx, err := strconv.Atoi(target); err == nil && idx >= 1 && idx <= len(models) {
+		target = models[idx-1].Name
+	}
+
+	switcher.SetModel(target)
+	e.cleanupInteractiveState(msg.SessionKey)
+
+	s := e.sessions.GetOrCreateActive(msg.SessionKey)
+	s.AgentSessionID = ""
+	s.ClearHistory()
+	e.sessions.Save()
+
+	e.reply(p, msg.ReplyCtx, e.i18n.Tf(MsgModelChanged, target))
 }
 
 func (e *Engine) cmdMode(p Platform, msg *Message, args []string) {

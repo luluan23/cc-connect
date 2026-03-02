@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -87,6 +88,88 @@ func normalizePermissionMode(raw string) string {
 }
 
 func (a *Agent) Name() string { return "claudecode" }
+
+func (a *Agent) SetModel(model string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.model = model
+	slog.Info("claudecode: model changed", "model", model)
+}
+
+func (a *Agent) GetModel() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.model
+}
+
+func (a *Agent) AvailableModels(ctx context.Context) []core.ModelOption {
+	if models := a.fetchModelsFromAPI(ctx); len(models) > 0 {
+		return models
+	}
+	return []core.ModelOption{
+		{Name: "sonnet", Desc: "Claude Sonnet 4 (balanced)"},
+		{Name: "opus", Desc: "Claude Opus 4 (most capable)"},
+		{Name: "haiku", Desc: "Claude Haiku 3.5 (fastest)"},
+	}
+}
+
+func (a *Agent) fetchModelsFromAPI(ctx context.Context) []core.ModelOption {
+	a.mu.Lock()
+	apiKey := ""
+	baseURL := ""
+	if a.activeIdx >= 0 && a.activeIdx < len(a.providers) {
+		apiKey = a.providers[a.activeIdx].APIKey
+		baseURL = a.providers[a.activeIdx].BaseURL
+	}
+	a.mu.Unlock()
+
+	if apiKey == "" {
+		apiKey = os.Getenv("ANTHROPIC_API_KEY")
+	}
+	if apiKey == "" {
+		return nil
+	}
+	if baseURL == "" {
+		baseURL = os.Getenv("ANTHROPIC_BASE_URL")
+	}
+	if baseURL == "" {
+		baseURL = "https://api.anthropic.com"
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+
+	req, err := http.NewRequestWithContext(ctx, "GET", baseURL+"/v1/models", nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("x-api-key", apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Debug("claudecode: failed to fetch models", "error", err)
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+
+	var result struct {
+		Data []struct {
+			ID          string `json:"id"`
+			DisplayName string `json:"display_name"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil
+	}
+
+	var models []core.ModelOption
+	for _, m := range result.Data {
+		models = append(models, core.ModelOption{Name: m.ID, Desc: m.DisplayName})
+	}
+	return models
+}
 
 func (a *Agent) SetSessionEnv(env []string) {
 	a.mu.Lock()

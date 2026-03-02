@@ -153,6 +153,10 @@ const (
 
 	MsgStatusTitle MsgKey = "status_title"
 
+	MsgModelCurrent      MsgKey = "model_current"
+	MsgModelChanged      MsgKey = "model_changed"
+	MsgModelNotSupported MsgKey = "model_not_supported"
+
 	MsgMemoryNotSupported MsgKey = "memory_not_supported"
 	MsgMemoryShowProject  MsgKey = "memory_show_project"
 	MsgMemoryShowGlobal   MsgKey = "memory_show_global"
@@ -277,6 +281,7 @@ var messages = map[MsgKey]map[Language]string{
 			"/provider [list|add|remove|switch]\n  Manage API providers\n\n" +
 			"/memory [add|global|global add]\n  View/edit agent memory files\n\n" +
 			"/allow <tool>\n  Pre-allow a tool (next session)\n\n" +
+			"/model [name]\n  View/switch model\n\n" +
 			"/mode [name]\n  View/switch permission mode\n\n" +
 			"/lang [en|zh|auto]\n  View/switch language\n\n" +
 			"/quiet\n  Toggle thinking/tool progress\n\n" +
@@ -295,6 +300,7 @@ var messages = map[MsgKey]map[Language]string{
 			"/provider [list|add|remove|switch]\n  管理 API Provider\n\n" +
 			"/memory [add|global|global add]\n  查看/编辑 Agent 记忆文件\n\n" +
 			"/allow <工具名>\n  预授权工具（下次会话生效）\n\n" +
+			"/model [名称]\n  查看/切换模型\n\n" +
 			"/mode [名称]\n  查看/切换权限模式\n\n" +
 			"/lang [en|zh|auto]\n  查看/切换语言\n\n" +
 			"/quiet\n  开关思考和工具进度消息\n\n" +
@@ -478,6 +484,18 @@ var messages = map[MsgKey]map[Language]string{
 			"%s" +
 			"%s" +
 			"%s",
+	},
+	MsgModelCurrent: {
+		LangEnglish: "Current model: %s",
+		LangChinese: "当前模型: %s",
+	},
+	MsgModelChanged: {
+		LangEnglish: "Model switched to `%s`. New sessions will use this model.",
+		LangChinese: "模型已切换为 `%s`，新会话将使用此模型。",
+	},
+	MsgModelNotSupported: {
+		LangEnglish: "This agent does not support model switching.",
+		LangChinese: "当前 Agent 不支持模型切换。",
 	},
 	MsgMemoryNotSupported: {
 		LangEnglish: "This agent does not support memory files.",

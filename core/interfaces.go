@@ -141,6 +141,22 @@ type MemoryFileProvider interface {
 	GlobalMemoryFile() string  // user-level instruction file (e.g., ~/.claude/CLAUDE.md)
 }
 
+// ModelSwitcher is an optional interface for agents that support runtime model switching.
+// Model changes take effect on the next session (existing sessions keep their model).
+type ModelSwitcher interface {
+	SetModel(model string)
+	GetModel() string
+	// AvailableModels tries to fetch models from the provider API.
+	// Falls back to a built-in list on failure.
+	AvailableModels(ctx context.Context) []ModelOption
+}
+
+// ModelOption describes a selectable model.
+type ModelOption struct {
+	Name string // model identifier passed to CLI
+	Desc string // short description (display_name or empty)
+}
+
 // ModeSwitcher is an optional interface for agents that support runtime permission mode switching.
 type ModeSwitcher interface {
 	SetMode(mode string)

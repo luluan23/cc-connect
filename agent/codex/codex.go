@@ -2,11 +2,14 @@ package codex
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -69,6 +72,99 @@ func normalizeMode(raw string) string {
 }
 
 func (a *Agent) Name() string { return "codex" }
+
+func (a *Agent) SetModel(model string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.model = model
+	slog.Info("codex: model changed", "model", model)
+}
+
+func (a *Agent) GetModel() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.model
+}
+
+func (a *Agent) AvailableModels(ctx context.Context) []core.ModelOption {
+	if models := a.fetchModelsFromAPI(ctx); len(models) > 0 {
+		return models
+	}
+	return []core.ModelOption{
+		{Name: "o4-mini", Desc: "O4 Mini (fast reasoning)"},
+		{Name: "o3", Desc: "O3 (most capable reasoning)"},
+		{Name: "gpt-4.1", Desc: "GPT-4.1 (balanced)"},
+		{Name: "gpt-4.1-mini", Desc: "GPT-4.1 Mini (fast)"},
+		{Name: "gpt-4.1-nano", Desc: "GPT-4.1 Nano (fastest)"},
+		{Name: "codex-mini-latest", Desc: "Codex Mini (code-optimized)"},
+	}
+}
+
+var openaiChatModels = map[string]bool{
+	"o4-mini": true, "o3": true, "o3-mini": true, "o1": true, "o1-mini": true,
+	"gpt-4.1": true, "gpt-4.1-mini": true, "gpt-4.1-nano": true,
+	"gpt-4o": true, "gpt-4o-mini": true,
+	"codex-mini-latest": true,
+}
+
+func (a *Agent) fetchModelsFromAPI(ctx context.Context) []core.ModelOption {
+	a.mu.Lock()
+	apiKey := ""
+	baseURL := ""
+	if a.activeIdx >= 0 && a.activeIdx < len(a.providers) {
+		apiKey = a.providers[a.activeIdx].APIKey
+		baseURL = a.providers[a.activeIdx].BaseURL
+	}
+	a.mu.Unlock()
+
+	if apiKey == "" {
+		apiKey = os.Getenv("OPENAI_API_KEY")
+	}
+	if apiKey == "" {
+		return nil
+	}
+	if baseURL == "" {
+		baseURL = os.Getenv("OPENAI_BASE_URL")
+	}
+	if baseURL == "" {
+		baseURL = "https://api.openai.com"
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+
+	req, err := http.NewRequestWithContext(ctx, "GET", baseURL+"/v1/models", nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Debug("codex: failed to fetch models", "error", err)
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+
+	var result struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil
+	}
+
+	var models []core.ModelOption
+	for _, m := range result.Data {
+		if openaiChatModels[m.ID] {
+			models = append(models, core.ModelOption{Name: m.ID})
+		}
+	}
+	sort.Slice(models, func(i, j int) bool { return models[i].Name < models[j].Name })
+	return models
+}
 
 func (a *Agent) SetSessionEnv(env []string) {
 	a.mu.Lock()
