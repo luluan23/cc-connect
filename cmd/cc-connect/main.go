@@ -19,6 +19,7 @@ import (
 	_ "github.com/chenhg5/cc-connect/agent/codex"
 	_ "github.com/chenhg5/cc-connect/agent/cursor"
 	_ "github.com/chenhg5/cc-connect/agent/gemini"
+	_ "github.com/chenhg5/cc-connect/agent/qoder"
 
 	_ "github.com/chenhg5/cc-connect/platform/dingtalk"
 	_ "github.com/chenhg5/cc-connect/platform/discord"
@@ -348,7 +349,7 @@ level = "info"
 name = "my-project"
 
 [projects.agent]
-type = "claudecode"   # "claudecode", "codex", "cursor", or "gemini"
+type = "claudecode"   # "claudecode", "codex", "cursor", "gemini", or "qoder"
 
 [projects.agent.options]
 work_dir = "/path/to/your/project"

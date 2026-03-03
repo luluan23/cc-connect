@@ -20,7 +20,7 @@ cc-connect bridges AI coding assistants running on your dev machine to the messa
               └────────────┘
               ┌─────┼─────┐
               ▼     ▼     ▼
-         Claude  Gemini  Codex  ...4 agents
+         Claude  Gemini  Codex  ...5 agents
           Code    CLI
 ```
 
@@ -28,7 +28,7 @@ cc-connect bridges AI coding assistants running on your dev machine to the messa
 
 > Time to uninstall OpenClaw — cc-connect gives you access to the most powerful coding agents available, not just one.
 
-- **4 AI Agents** — Claude Code, Codex, Cursor Agent, Gemini CLI. Use whichever fits your workflow, or all of them at once.
+- **5 AI Agents** — Claude Code, Codex, Cursor Agent, Qoder CLI, Gemini CLI. Use whichever fits your workflow, or all of them at once.
 - **8 Chat Platforms** — Feishu, DingTalk, Slack, Telegram, Discord, WeChat Work, LINE, QQ. Most need zero public IP.
 - **Full Control from Chat** — Switch models (`/model`), change permission modes (`/mode`), manage sessions, all via slash commands.
 - **Agent Memory** — Read and write agent instruction files (`/memory`) without touching the terminal.
@@ -48,6 +48,7 @@ cc-connect bridges AI coding assistants running on your dev machine to the messa
 | Agent | Codex (OpenAI) | ✅ Supported |
 | Agent | Cursor Agent | ✅ Supported |
 | Agent | Gemini CLI (Google) | ✅ Supported |
+| Agent | Qoder CLI | ✅ Supported |
 | Agent | Crush / OpenCode | 🔜 Planned |
 | Agent | Goose (Block) | 🔜 Planned |
 | Agent | Aider | 🔜 Planned |
@@ -79,7 +80,8 @@ cc-connect bridges AI coding assistants running on your dev machine to the messa
 - **Claude Code**: [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and configured, OR
 - **Codex**: [Codex CLI](https://github.com/openai/codex) installed (`npm install -g @openai/codex`), OR
 - **Cursor Agent**: [Cursor Agent CLI](https://docs.cursor.com/agent) installed (`agent --version` to verify), OR
-- **Gemini CLI**: [Gemini CLI](https://github.com/google-gemini/gemini-cli) installed (`npm install -g @google/gemini-cli`)
+- **Gemini CLI**: [Gemini CLI](https://github.com/google-gemini/gemini-cli) installed (`npm install -g @google/gemini-cli`), OR
+- **Qoder CLI**: [Qoder CLI](https://qoder.com) installed (`curl -fsSL https://qoder.com/install | bash`)
 
 ### Install & Configure via AI Agent (Recommended)
 
@@ -265,6 +267,13 @@ All agents support permission modes switchable at runtime via `/mode`.
 | **YOLO** | `yolo` | Auto-approve all tool calls. |
 | **Plan** | `plan` | Read-only plan mode, no execution. |
 
+**Qoder CLI** modes:
+
+| Mode | Config Value | Behavior |
+|------|-------------|----------|
+| **Default** | `default` | Standard permissions; prompt for approval. |
+| **YOLO** | `yolo` | Skip all permission checks, auto-approve. |
+
 ```toml
 # Claude Code
 [projects.agent.options]
@@ -281,6 +290,10 @@ mode = "full-auto"
 mode = "default"
 
 # Gemini CLI
+[projects.agent.options]
+mode = "default"
+
+# Qoder CLI
 [projects.agent.options]
 mode = "default"
 ```
@@ -458,6 +471,7 @@ Claude Code will automatically translate your request into a `cc-connect cron ad
 |-------|-----------------|
 | Codex | `AGENTS.md` |
 | Cursor | `.cursorrules` |
+| Qoder CLI | `AGENTS.md` (project), `~/.qoder/AGENTS.md` (global) |
 | Gemini CLI | `GEMINI.md` |
 
 **Content to add:**
@@ -618,6 +632,7 @@ cc-connect/
 │   ├── claudecode/          # Claude Code CLI (interactive sessions)
 │   ├── codex/               # OpenAI Codex CLI (exec --json)
 │   ├── cursor/              # Cursor Agent CLI (--print stream-json)
+│   ├── qoder/               # Qoder CLI (-p -f stream-json)
 │   └── gemini/              # Gemini CLI (-p --output-format stream-json)
 ├── docs/                    # Platform setup guides
 ├── config.example.toml      # Config template

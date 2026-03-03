@@ -103,7 +103,7 @@ level = "info"  # debug, info, warn, error
 name = "my-project"
 
 [projects.agent]
-type = "claudecode"  # or "codex", "cursor", "gemini"
+type = "claudecode"  # or "codex", "cursor", "gemini", "qoder"
 
 [projects.agent.options]
 work_dir = "/absolute/path/to/your/project"
@@ -116,6 +116,10 @@ mode = "default"
 # --- Codex mode options ---
 # "suggest" (default), "auto-edit", "full-auto", "yolo"
 # model = "o3"  # optional: specify model
+
+# --- Qoder CLI mode options ---
+# "default", "yolo"
+# model = "auto"  # "auto", "ultimate", "performance", "efficient", "lite"
 
 # Add one or more platform sections below
 ```
@@ -399,12 +403,13 @@ cc-connect supports scheduled tasks (cron jobs). You can always create them via 
 
 **Claude Code** handles this automatically via `--append-system-prompt` — no extra setup needed.
 
-**For Codex, Cursor Agent, or Gemini CLI**, add the following instructions to the agent's project-level instruction file in your project's `work_dir`:
+**For Codex, Cursor Agent, Qoder CLI, or Gemini CLI**, add the following instructions to the agent's project-level instruction file in your project's `work_dir`:
 
 | Agent | File to create/edit |
 |-------|-------------------|
 | Codex | `AGENTS.md` |
 | Cursor Agent | `.cursorrules` |
+| Qoder CLI | `AGENTS.md` |
 | Gemini CLI | `GEMINI.md` |
 
 **Content to add** (copy-paste into the file):
@@ -520,6 +525,24 @@ type = "slack"
 [projects.platforms.options]
 bot_token = "xoxb-xxx"
 app_token = "xapp-xxx"
+
+# Fifth project — using Qoder CLI
+[[projects]]
+name = "my-qoder-project"
+
+[projects.agent]
+type = "qoder"
+
+[projects.agent.options]
+work_dir = "/path/to/qoder-project"
+mode = "default"    # "default" | "yolo"
+# model = "auto"    # "auto" | "ultimate" | "performance" | "efficient" | "lite"
+
+[[projects.platforms]]
+type = "telegram"
+
+[projects.platforms.options]
+token = "xxx"
 ```
 
 ## Upgrade
@@ -563,6 +586,7 @@ The following additional features are available:
 - **Codex Agent**: OpenAI Codex CLI integration (`codex exec --json`)
 - **Cursor Agent**: Cursor Agent CLI integration (`agent --print --output-format stream-json`)
 - **Gemini CLI**: Google Gemini CLI integration (`gemini -p --output-format stream-json`)
+- **Qoder CLI**: Qoder CLI integration (`qodercli -p -f stream-json`)
 - **Voice Messages (STT)**: Speech-to-text via Whisper API (OpenAI / Groq / SiliconFlow). Requires `ffmpeg` and `[speech]` config.
 - **Image Messages**: Send images to Claude Code for multimodal analysis
 - **API Provider Management**: Runtime switching between API providers via `/provider` command or CLI
