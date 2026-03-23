@@ -4331,11 +4331,41 @@ func (s *blockingSendAgentSession) Send(_ string, _ []ImageAttachment, _ []FileA
 	return nil
 }
 
+// permSignalInlinePlatform wraps stubInlineButtonPlatform and signals when a
+// SendWithButtons call includes perm:allow, so tests do not read buttonRows
+// from another goroutine (race with the engine under -race).
+type permSignalInlinePlatform struct {
+	stubInlineButtonPlatform
+	permAllowSent chan<- struct{}
+}
+
+func (p *permSignalInlinePlatform) SendWithButtons(ctx context.Context, replyCtx any, content string, buttons [][]ButtonOption) error {
+	if err := p.stubInlineButtonPlatform.SendWithButtons(ctx, replyCtx, content, buttons); err != nil {
+		return err
+	}
+	for _, row := range buttons {
+		for _, b := range row {
+			if b.Data == "perm:allow" {
+				select {
+				case p.permAllowSent <- struct{}{}:
+				default:
+				}
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
 // Regression: permission events must be handled while Send is still blocked.
 // If the engine called Send synchronously before reading Events(), this would deadlock
 // and never call sendPermissionPrompt.
 func TestProcessInteractiveEvents_PermissionWhileSendBlocked(t *testing.T) {
-	p := &stubInlineButtonPlatform{stubPlatformEngine: stubPlatformEngine{n: "telegram"}}
+	permAllowSent := make(chan struct{}, 1)
+	p := &permSignalInlinePlatform{
+		stubInlineButtonPlatform: stubInlineButtonPlatform{stubPlatformEngine: stubPlatformEngine{n: "telegram"}},
+		permAllowSent:            permAllowSent,
+	}
 	sess := newBlockingSendSession("blk-perm")
 	e := NewEngine("test", &stubAgent{}, []Platform{p}, "", LangEnglish)
 
@@ -4375,17 +4405,10 @@ func TestProcessInteractiveEvents_PermissionWhileSendBlocked(t *testing.T) {
 		ToolInputRaw: map[string]any{"path": "/tmp/x"},
 	}
 
-	deadline := time.After(2 * time.Second)
-	for {
-		if len(p.buttonRows) > 0 && p.buttonRows[0][0].Data == "perm:allow" {
-			break
-		}
-		select {
-		case <-deadline:
-			t.Fatalf("permission inline buttons not sent while Send blocked (rows=%v)", p.buttonRows)
-		default:
-			time.Sleep(5 * time.Millisecond)
-		}
+	select {
+	case <-permAllowSent:
+	case <-time.After(2 * time.Second):
+		t.Fatal("permission inline buttons not sent while Send blocked")
 	}
 
 	if !e.handlePendingPermission(p, &Message{SessionKey: key, ReplyCtx: "ctx"}, "allow") {
