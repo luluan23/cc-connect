@@ -2211,6 +2211,55 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				}
 			}
 
+		case EventToolResult:
+			if !quiet {
+				out := strings.TrimSpace(event.Content)
+				if out == "" {
+					out = strings.TrimSpace(event.ToolResult)
+				}
+				if out == "" {
+					break
+				}
+				tn := strings.TrimSpace(event.ToolName)
+				if tn == "" {
+					tn = "tool"
+				}
+				previewActive := sp.canPreview()
+				if len(textParts) > segmentStart {
+					if !previewActive {
+						segment := strings.Join(textParts[segmentStart:], "")
+						if segment != "" {
+							for _, chunk := range splitMessage(segment, maxPlatformMessageLen) {
+								e.send(p, replyCtx, chunk)
+							}
+						}
+					}
+					segmentStart = len(textParts)
+				}
+				sp.freeze()
+				if previewActive {
+					sp.detachPreview()
+				}
+				var formattedOut string
+				if strings.Contains(out, "```") {
+					formattedOut = out
+				} else if strings.Contains(out, "\n") || utf8.RuneCountInString(out) > 200 {
+					lang := toolCodeLang(tn, out)
+					formattedOut = fmt.Sprintf("```%s\n%s\n```", lang, out)
+				} else {
+					switch tn {
+					case "shell", "run_shell_command", "Bash":
+						formattedOut = fmt.Sprintf("```bash\n%s\n```", out)
+					default:
+						formattedOut = fmt.Sprintf("`%s`", out)
+					}
+				}
+				toolMsg := fmt.Sprintf(e.i18n.T(MsgToolResult), tn, formattedOut)
+				for _, chunk := range SplitMessageCodeFenceAware(toolMsg, maxPlatformMessageLen) {
+					e.send(p, replyCtx, chunk)
+				}
+			}
+
 		case EventText:
 			if event.Content != "" {
 				textParts = append(textParts, event.Content)
@@ -5083,6 +5132,21 @@ func (e *Engine) processCompressEvents(state *interactiveState, session *Session
 		case EventText:
 			if !auto && event.Content != "" {
 				textParts = append(textParts, event.Content)
+			}
+		case EventToolResult:
+			if !auto {
+				out := strings.TrimSpace(event.Content)
+				if out == "" {
+					out = strings.TrimSpace(event.ToolResult)
+				}
+				if out == "" {
+					break
+				}
+				tn := strings.TrimSpace(event.ToolName)
+				if tn == "" {
+					tn = "tool"
+				}
+				textParts = append(textParts, fmt.Sprintf(e.i18n.T(MsgToolResult), tn, out)+"\n")
 			}
 		case EventResult:
 			result := event.Content
@@ -8632,6 +8696,18 @@ func (e *Engine) HandleRelay(ctx context.Context, fromProject, chatID, message s
 				if session.CompareAndSetAgentSessionID(event.SessionID, e.agent.Name()) {
 					e.sessions.Save()
 				}
+			}
+		case EventToolResult:
+			out := strings.TrimSpace(event.Content)
+			if out == "" {
+				out = strings.TrimSpace(event.ToolResult)
+			}
+			if out != "" {
+				tn := strings.TrimSpace(event.ToolName)
+				if tn == "" {
+					tn = "tool"
+				}
+				textParts = append(textParts, fmt.Sprintf(e.i18n.T(MsgToolResult), tn, out)+"\n\n")
 			}
 		case EventResult:
 			if event.SessionID != "" {

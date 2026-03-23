@@ -21,6 +21,39 @@ func TestMapSessionUpdate_agentMessageChunk(t *testing.T) {
 	}
 }
 
+func TestMapSessionUpdate_toolCallUpdate_inProgress(t *testing.T) {
+	params := json.RawMessage(`{
+		"sessionId": "s1",
+		"update": {
+			"sessionUpdate": "tool_call_update",
+			"toolCallId": "c1",
+			"title": "Run",
+			"status": "in_progress",
+			"content": [
+				{"type": "content", "content": {"type": "text", "text": "partial output"}}
+			]
+		}
+	}`)
+	evs := mapSessionUpdate("", params)
+	if len(evs) != 1 || evs[0].Type != core.EventToolResult || evs[0].ToolName != "Run" {
+		t.Fatalf("got %+v", evs)
+	}
+}
+
+func TestMapSessionUpdate_reasoningChunk(t *testing.T) {
+	params := json.RawMessage(`{
+		"sessionId": "s1",
+		"update": {
+			"sessionUpdate": "reasoning_chunk",
+			"content": {"type": "text", "text": "step 1"}
+		}
+	}`)
+	evs := mapSessionUpdate("", params)
+	if len(evs) != 1 || evs[0].Type != core.EventThinking || evs[0].Content != "step 1" {
+		t.Fatalf("got %+v", evs)
+	}
+}
+
 func TestMapSessionUpdate_toolCall(t *testing.T) {
 	params := json.RawMessage(`{
 		"sessionId": "s1",

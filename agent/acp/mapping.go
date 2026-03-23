@@ -41,7 +41,8 @@ func mapSessionUpdate(sessionID string, params json.RawMessage) []core.Event {
 		// History replay during session/load — show as text for IM.
 		return mapAgentMessageChunk(sid, wrap.Update)
 	default:
-		return nil
+		// Optional vendor / future ACP shapes — best-effort text extraction.
+		return mapSessionUpdateFallback(sid, head.SessionUpdate, wrap.Update)
 	}
 }
 
@@ -92,6 +93,7 @@ func mapToolCall(sessionID string, update json.RawMessage) []core.Event {
 
 func mapToolCallUpdate(sessionID string, update json.RawMessage) []core.Event {
 	var u struct {
+		Title      string `json:"title"`
 		ToolCallID string `json:"toolCallId"`
 		Status     string `json:"status"`
 		Content    []struct {
@@ -105,24 +107,99 @@ func mapToolCallUpdate(sessionID string, update json.RawMessage) []core.Event {
 	if err := json.Unmarshal(update, &u); err != nil {
 		return nil
 	}
-	if strings.EqualFold(u.Status, "completed") || strings.EqualFold(u.Status, "failed") {
-		var b strings.Builder
-		for _, c := range u.Content {
-			if c.Content.Text != "" {
-				if b.Len() > 0 {
-					b.WriteByte('\n')
-				}
-				b.WriteString(c.Content.Text)
-			}
+	toolLabel := u.Title
+	if toolLabel == "" {
+		toolLabel = u.ToolCallID
+	}
+	if toolLabel == "" {
+		toolLabel = "tool"
+	}
+	body := extractToolCallContentText(u.Content)
+	st := strings.ToLower(strings.TrimSpace(u.Status))
+
+	switch {
+	case st == "completed" || st == "failed":
+		if body == "" && st == "completed" {
+			return nil
 		}
-		name := u.ToolCallID
-		if name == "" {
-			name = "tool"
+		if st == "failed" && body == "" {
+			body = "(failed)"
 		}
 		return []core.Event{{
 			Type:      core.EventToolResult,
-			ToolName:  name,
-			Content:   truncateRunes(b.String(), 500),
+			ToolName:  toolLabel,
+			Content:   truncateRunes(body, 800),
+			SessionID: sessionID,
+		}}
+	case st == "in_progress" || st == "pending":
+		// Stream intermediate tool output to IM (ACP allows content while not terminal).
+		if body == "" {
+			return nil
+		}
+		return []core.Event{{
+			Type:      core.EventToolResult,
+			ToolName:  toolLabel,
+			Content:   truncateRunes(body, 800),
+			SessionID: sessionID,
+		}}
+	default:
+		if body != "" {
+			return []core.Event{{
+				Type:      core.EventToolResult,
+				ToolName:  toolLabel,
+				Content:   truncateRunes(body, 800),
+				SessionID: sessionID,
+			}}
+		}
+		return nil
+	}
+}
+
+func extractToolCallContentText(blocks []struct {
+	Type    string `json:"type"`
+	Content struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	} `json:"content"`
+}) string {
+	var b strings.Builder
+	for _, c := range blocks {
+		if c.Content.Text != "" {
+			if b.Len() > 0 {
+				b.WriteByte('\n')
+			}
+			b.WriteString(c.Content.Text)
+		}
+	}
+	return b.String()
+}
+
+// mapSessionUpdateFallback handles unknown sessionUpdate values (vendor extensions
+// that still carry human-readable text). Never guesses auth or tool semantics.
+func mapSessionUpdateFallback(sessionID string, kind string, update json.RawMessage) []core.Event {
+	// Some agents may send reasoning as a dedicated discriminator; map to EventThinking.
+	switch strings.ToLower(kind) {
+	case "reasoning", "reasoning_chunk", "thinking", "agent_thinking_chunk":
+		var u struct {
+			Content struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+			Text string `json:"text"`
+		}
+		if json.Unmarshal(update, &u) != nil {
+			return nil
+		}
+		t := u.Content.Text
+		if t == "" {
+			t = u.Text
+		}
+		if t == "" {
+			return nil
+		}
+		return []core.Event{{
+			Type:      core.EventThinking,
+			Content:   t,
 			SessionID: sessionID,
 		}}
 	}
