@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/GongchuangSu/open-event-sdk-go v1.1.1
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
@@ -18,11 +19,11 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/slack-go/slack v0.15.0
 	github.com/stretchr/testify v1.11.1
+	modernc.org/sqlite v1.49.1
 	rsc.io/qr v0.2.0
 )
 
 require (
-	github.com/GongchuangSu/open-event-sdk-go v1.1.1 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/colorprofile v0.4.1 // indirect
 	github.com/charmbracelet/x/ansi v0.11.6 // indirect
@@ -57,5 +58,4 @@ require (
 	modernc.org/libc v1.72.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.49.1 // indirect
 )
